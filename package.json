@@ -1,0 +1,30 @@
+{
+  "name": "kiro-gateway",
+  "version": "1.0.0",
+  "description": "Anthropic-compatible API gateway powered by Kiro/AWS SSO credentials",
+  "bin": {
+    "kiro-gateway": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "kiro",
+    "anthropic",
+    "gateway",
+    "proxy",
+    "claude",
+    "ai"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0"
+  }
+}
