@@ -3,7 +3,7 @@
   "displayName": "LLM Gateway Manager for Kiro",
   "description": "Server Lifecycle Manager for Local LLM Gateway",
   "publisher": "dnguyenminh",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "vscode": "^1.85.0"
   },
