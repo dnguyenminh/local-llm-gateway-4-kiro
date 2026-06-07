@@ -3,3 +3,25 @@ dist/
 *.js.map
 *.d.ts.map
 .DS_Store
+
+# Extension build output
+extension/out/
+extension/node_modules/
+extension/*.vsix
+
+# IDE & tool configs
+.code-intel/
+.vscode/
+.kiro/
+
+# Documents (SDLC pipeline output - not for public repo)
+documents/
+
+# Secrets & credentials
+*.env
+*.pem
+*.key
+gateway-key
+
+# Review files (not for public)
+review.md

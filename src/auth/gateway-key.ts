@@ -7,11 +7,11 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 
-const GATEWAY_KEY_FILE = 'kiro-ts-gateway-key';
+const GATEWAY_KEY_FILE = 'gateway-key';
 let gatewayApiKey: string | null = null;
 
 function getGatewayKeyPath(): string {
-  return path.join(os.homedir(), '.aws', 'sso', 'cache', GATEWAY_KEY_FILE);
+  return path.join(os.homedir(), '.local-llm-gateway', GATEWAY_KEY_FILE);
 }
 
 export function getGatewayApiKey(): string {

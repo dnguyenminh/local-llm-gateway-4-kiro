@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  build:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install gateway deps
+        run: npm ci
+
+      - name: Type check (tsc)
+        run: npx tsc --noEmit
+
+      - name: Build gateway (esbuild)
+        run: npm run build
+
+      - name: Verify build output
+        run: test -f dist/index.js && echo "✅ dist/index.js exists" || exit 1
+
+      - name: Install extension deps
+        working-directory: extension
+        run: npm ci
+
+      - name: Type check extension
+        working-directory: extension
+        run: npx tsc --noEmit
+
+      - name: Build extension (esbuild)
+        working-directory: extension
+        run: npm run compile
+
+      - name: Verify extension output
+        run: test -f extension/out/extension.js && echo "✅ extension.js exists" || exit 1

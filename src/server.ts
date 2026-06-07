@@ -39,8 +39,14 @@ export function createServer(config: GatewayConfig): http.Server {
       return;
     }
 
-    // Gateway key endpoint
+    // Gateway key endpoint (localhost only)
     if (req.method === 'GET' && (routePath === '/v1/gateway-key' || pathOnly === '/v1/gateway-key')) {
+      const remoteAddr = req.socket.remoteAddress || '';
+      if (remoteAddr !== '127.0.0.1' && remoteAddr !== '::1' && remoteAddr !== '::ffff:127.0.0.1') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ type: 'error', error: { type: 'forbidden', message: 'Gateway key endpoint is only accessible from localhost' } }));
+        return;
+      }
       const key = getGatewayApiKey();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ gateway_key: key }));

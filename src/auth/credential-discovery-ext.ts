@@ -92,8 +92,8 @@ export async function ensureFreshKiroToken(): Promise<KiroSSOToken | null> {
 
 // --- API Region ---
 function getApiRegionCachePath(): string { return path.join(os.homedir(), '.aws', 'sso', 'cache', API_REGION_CACHE_FILE); }
-function readPersistedApiRegion(): string | null { try { const p = getApiRegionCachePath(); if (!fs.existsSync(p)) return null; const r = fs.readFileSync(p, 'utf-8').trim(); return r || null; } catch { return null; } }
-function persistApiRegion(region: string): void { try { fs.writeFileSync(getApiRegionCachePath(), region, 'utf-8'); } catch {} }
+function readPersistedApiRegion(): string | null { try { const p = getApiRegionCachePath(); if (!fs.existsSync(p)) return null; const r = fs.readFileSync(p, 'utf-8').trim(); return r || null; } catch (err: any) { console.error('[kiro-gateway] readPersistedApiRegion error:', err.message); return null; } }
+function persistApiRegion(region: string): void { try { fs.writeFileSync(getApiRegionCachePath(), region, 'utf-8'); } catch (err: any) { console.error('[kiro-gateway] persistApiRegion failed:', err.message); } }
 
 export function invalidateApiRegionCache(): void {
   cachedApiRegion = null;
@@ -164,3 +164,4 @@ function resolveProfileArn(token?: KiroSSOToken | null): string | undefined {
   } catch {}
   return undefined;
 }
+

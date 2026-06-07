@@ -1,5 +1,8 @@
 /**
  * Anthropic Passthrough Adapter — bring-your-own-key fallback
+ * KG-3: Body accumulation uses Buffer.concat
+ * KG-4: onComplete fires for streaming passthrough mode
+ * KG-7: Debug logging for silent catch blocks
  */
 import * as https from 'https';
 import * as http from 'http';
@@ -43,7 +46,11 @@ export class AnthropicPassthroughAdapter implements LLMBackendAdapter {
     try {
       const models = await fetchAnthropicModels(this.apiKey);
       return models.length > 0 ? models : ANTHROPIC_FALLBACK_MODELS;
-    } catch { return ANTHROPIC_FALLBACK_MODELS; }
+    } catch (err: any) {
+      // KG-7: Debug logging
+      console.error('[kiro-gateway] fetchAnthropicModels failed:', err.message);
+      return ANTHROPIC_FALLBACK_MODELS;
+    }
   }
 
   async createMessage(request: any, res: http.ServerResponse, stream: boolean): Promise<void> {
@@ -52,9 +59,14 @@ export class AnthropicPassthroughAdapter implements LLMBackendAdapter {
     const headers: Record<string, string> = { 'Content-Type': 'application/json', 'x-api-key': this.apiKey || '', 'anthropic-version': ANTHROPIC_VERSION };
     const bodyStr = JSON.stringify(upstreamBody);
     if (stream) {
+      // KG-4: onComplete now fires for streaming passthrough mode
       proxyStream({ targetUrl, headers, body: bodyStr }, res,
-        () => {},
-        (err) => { if (!res.headersSent) sendError(res, err instanceof UpstreamError ? err.statusCode : 502, 'api_error', err.message || 'Failed to connect to AI service'); });
+        (blocks) => { this.options.onComplete?.(blocks); },
+        (err) => {
+          // KG-7: Debug logging
+          console.error('[kiro-gateway] passthrough stream error:', err.message);
+          if (!res.headersSent) sendError(res, err instanceof UpstreamError ? err.statusCode : 502, 'api_error', err.message || 'Failed to connect to AI service');
+        });
     } else {
       try {
         const upstream = await proxyNonStreaming({ targetUrl, headers, body: bodyStr });
@@ -63,7 +75,11 @@ export class AnthropicPassthroughAdapter implements LLMBackendAdapter {
         if (response.content) this.options.onComplete?.(response.content);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(upstream.body);
-      } catch (err: any) { sendError(res, 502, 'api_error', err.message || 'Failed to connect to AI service'); }
+      } catch (err: any) {
+        // KG-7: Debug logging
+        console.error('[kiro-gateway] passthrough non-streaming error:', err.message, err.stack);
+        sendError(res, 502, 'api_error', err.message || 'Failed to connect to AI service');
+      }
     }
   }
 }
@@ -82,12 +98,18 @@ function defaultBuildBody(request: any): any {
 export function fetchAnthropicModels(apiKey: string): Promise<AnthropicModel[]> {
   return new Promise((resolve, reject) => {
     const req = https.request({ hostname: 'api.anthropic.com', port: 443, path: '/v1/models?limit=100', method: 'GET', headers: { 'x-api-key': apiKey, 'anthropic-version': ANTHROPIC_VERSION } }, (resp) => {
-      let body = '';
-      resp.on('data', (c: Buffer) => { body += c.toString(); });
+      // KG-3: Buffer.concat for response body
+      const chunks: Buffer[] = [];
+      resp.on('data', (c: Buffer) => { chunks.push(c); });
       resp.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
         if ((resp.statusCode || 500) >= 400) { reject(new Error(`Anthropic models API error ${resp.statusCode}`)); return; }
         try { const p = JSON.parse(body); resolve((Array.isArray(p.data) ? p.data : []).map((m: any) => ({ type: 'model', id: m.id, display_name: m.display_name || m.id, created_at: m.created_at }))); }
-        catch { reject(new Error('Failed to parse Anthropic models response')); }
+        catch (err: any) {
+          // KG-7: Debug logging
+          console.error('[kiro-gateway] Failed to parse Anthropic models response:', err.message);
+          reject(new Error('Failed to parse Anthropic models response'));
+        }
       });
     });
     req.on('error', reject);

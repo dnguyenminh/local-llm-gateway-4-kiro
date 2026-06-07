@@ -1,0 +1,80 @@
+{
+  "name": "local-llm-gateway-4-kiro-extension",
+  "displayName": "LLM Gateway Manager for Kiro",
+  "description": "Server Lifecycle Manager for Local LLM Gateway",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "kiroGateway.startServer",
+        "title": "LLM Gateway: Start Server"
+      },
+      {
+        "command": "kiroGateway.stopServer",
+        "title": "LLM Gateway: Stop Server"
+      },
+      {
+        "command": "kiroGateway.restartServer",
+        "title": "LLM Gateway: Restart Server"
+      },
+      {
+        "command": "kiroGateway.showStatus",
+        "title": "LLM Gateway: Show Status"
+      },
+      {
+        "command": "kiroGateway.copyApiKey",
+        "title": "LLM Gateway: Copy API Key"
+      }
+    ],
+    "configuration": {
+      "title": "Kiro Gateway",
+      "properties": {
+        "kiroGateway.port": {
+          "type": "number",
+          "default": 8990,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Port for the Kiro Gateway server"
+        },
+        "kiroGateway.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start server when VS Code opens"
+        },
+        "kiroGateway.serverPath": {
+          "type": "string",
+          "default": "./dist/index.js",
+          "description": "Path to the Kiro Gateway server script"
+        },
+        "kiroGateway.healthCheckInterval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Health check interval in seconds"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "esbuild src/extension.ts --bundle --platform=node --target=node18 --outfile=out/extension.js --format=cjs --external:vscode",
+    "compile:tsc": "tsc -p ./",
+    "watch": "esbuild src/extension.ts --bundle --platform=node --target=node18 --outfile=out/extension.js --format=cjs --external:vscode --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.4.0"
+  }
+}

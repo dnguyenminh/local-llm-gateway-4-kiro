@@ -1,6 +1,7 @@
 /**
  * Kiro Stream Converter
  * Converts parsed Kiro AWS Event Stream frames into Anthropic SSE events.
+ * KG-5: Reverses tool name truncation in responses using toolNameMap.
  */
 import * as crypto from 'crypto';
 import { EventFrame, messageType, eventType, exceptionType, errorCode } from './event-stream-parser';
@@ -13,6 +14,7 @@ export interface SSEEvent {
 export class KiroStreamConverter {
   private messageId: string;
   private model: string;
+  private toolNameMap: Record<string, string>;
   private messageStarted = false;
   private messageEnded = false;
   private nextIndex = 0;
@@ -21,8 +23,9 @@ export class KiroStreamConverter {
   private outputTokens = 0;
   private stopReason = 'end_turn';
 
-  constructor(model: string, messageId?: string) {
+  constructor(model: string, toolNameMap?: Record<string, string>, messageId?: string) {
     this.model = model;
+    this.toolNameMap = toolNameMap || {};
     this.messageId = messageId || `msg_${crypto.randomBytes(12).toString('hex')}`;
   }
 
@@ -93,10 +96,15 @@ export class KiroStreamConverter {
 
   private handleToolUse(payload: any): SSEEvent[] {
     const events: SSEEvent[] = [];
-    const name = typeof payload.name === 'string' ? payload.name : '';
+    let name = typeof payload.name === 'string' ? payload.name : '';
     const toolUseId = typeof payload.toolUseId === 'string' ? payload.toolUseId : '';
     const input = typeof payload.input === 'string' ? payload.input : '';
     const stop = payload.stop === true;
+
+    // KG-5: Reverse tool name truncation — map shortened name back to original
+    if (name && this.toolNameMap[name]) {
+      name = this.toolNameMap[name];
+    }
 
     if (this.currentTextBlock) events.push(...this.closeTextBlock());
     if (!this.currentToolBlock) {

@@ -1,13 +1,14 @@
 {
-  "name": "kiro-gateway",
+  "name": "local-llm-gateway-4-kiro",
   "version": "1.0.0",
-  "description": "Anthropic-compatible API gateway powered by Kiro/AWS SSO credentials",
+  "description": "Anthropic-compatible local API gateway for Kiro IDE — powered by SSO credentials",
   "bin": {
-    "kiro-gateway": "dist/index.js"
+    "llm-gateway": "dist/index.js"
   },
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --format=cjs --banner:js=\"#!/usr/bin/env node\"",
+    "build:tsc": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts"
   },
@@ -24,7 +25,8 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "@types/node": "^20.11.0"
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.4.0"
   }
 }

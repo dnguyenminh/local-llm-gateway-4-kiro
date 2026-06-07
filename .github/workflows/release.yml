@@ -1,0 +1,116 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-server:
+    name: Build Gateway Server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (esbuild single file)
+        run: npm run build
+
+      - name: Package server
+        run: |
+          mkdir -p release
+          cp dist/index.js release/llm-gateway.js
+          cp package.json release/
+          cp README.md release/
+          cp LICENSE release/
+          cd release && tar -czf ../llm-gateway-server-${{ github.ref_name }}.tar.gz .
+
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-bundle
+          path: llm-gateway-server-${{ github.ref_name }}.tar.gz
+
+  build-extension:
+    name: Build VS Code/Kiro Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Build extension (esbuild single file)
+        working-directory: extension
+        run: npm run compile
+
+      - name: Package VSIX
+        working-directory: extension
+        run: npx @vscode/vsce package --no-dependencies --allow-missing-repository
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-vsix
+          path: extension/*.vsix
+
+  release:
+    name: Create GitHub Release
+    needs: [build-server, build-extension]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download server artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: server-bundle
+          path: ./artifacts
+
+      - name: Download extension artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-vsix
+          path: ./artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Local LLM Gateway for Kiro — ${{ github.ref_name }}
+
+            ### Downloads
+
+            - **Gateway Server** (`llm-gateway-server-${{ github.ref_name }}.tar.gz`) — Single-file Node.js server. Extract and run with `node llm-gateway.js`
+            - **VS Code/Kiro Extension** (`.vsix`) — Install via `code --install-extension <file>.vsix` or `kiro --install-extension <file>.vsix`
+
+            ### Quick Start
+
+            ```bash
+            # Server
+            tar -xzf llm-gateway-server-${{ github.ref_name }}.tar.gz
+            node llm-gateway.js
+
+            # Extension
+            code --install-extension local-llm-gateway-4-kiro-extension-1.0.0.vsix
+            ```
+          files: |
+            ./artifacts/*
+          draft: false
+          prerelease: false

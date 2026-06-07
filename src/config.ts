@@ -16,7 +16,7 @@ export function parseConfig(args: string[]): GatewayConfig {
     const arg = args[i];
     if ((arg === '--port' || arg === '-p') && i + 1 < args.length) {
       config.port = parseInt(args[++i], 10);
-    } else if (arg === '--region' && i + 1 < args.length) {
+    } else if (arg === '--api-region' && i + 1 < args.length) {
       config.region = args[++i];
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -41,7 +41,7 @@ Usage:
 
 Options:
   --port, -p <number>   Port to listen on (default: 8990, env: KIRO_GATEWAY_PORT)
-  --region <string>     AWS region for CodeWhisperer API (env: KIRO_API_REGION)
+  --api-region <string> AWS region for API endpoint (env: KIRO_API_REGION)
   --help, -h            Show this help
 
 Environment Variables:

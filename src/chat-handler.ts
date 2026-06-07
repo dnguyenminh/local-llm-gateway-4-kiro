@@ -1,24 +1,27 @@
 /**
  * Chat Handler — POST /v1/messages
+ * KG-1: Fixed memory leak (uses ConversationStore with TTL/eviction)
+ * KG-2: Gateway key auth enforced
+ * KG-3: Body accumulation uses Buffer.concat instead of string concat
+ * KG-4: onComplete fires for streaming passthrough mode
+ * KG-7: Debug logging for silent catch blocks
  */
 import * as http from 'http';
 import { validateRequest } from './utils/request-validator';
 import { resolveAuth, ensureFreshKiroToken, buildKiroAuthResult } from './auth/credential-discovery-ext';
+import { getGatewayApiKey } from './auth/gateway-key';
 import { RefreshTokenExpiredError } from './auth/token-refresh';
 import { selectAdapter } from './adapters/index';
+import { ConversationStore } from './conversation-store';
 
 const MAX_BODY_SIZE = 4 * 1024 * 1024;
 
-// Simple in-memory conversation store
-class ConversationStore {
-  private sessions = new Map<string, { messages: any[]; toolUseIndex: Map<string, any> }>();
-  getOrCreate(id: string) {
-    if (!this.sessions.has(id)) this.sessions.set(id, { messages: [], toolUseIndex: new Map() });
-    return this.sessions.get(id)!;
-  }
-}
-
 const conversationStore = new ConversationStore();
+
+/** Exported for health/stats endpoints */
+export function getConversationStoreStats() {
+  return conversationStore.stats();
+}
 
 export function handleChatRoute(req: http.IncomingMessage, res: http.ServerResponse): boolean {
   if (req.method !== 'POST') return false;
@@ -27,21 +30,40 @@ export function handleChatRoute(req: http.IncomingMessage, res: http.ServerRespo
   else if (url === '/anthropic') url = '/v1/messages';
   if (url !== '/v1/messages' && url !== '/api/chat/completions') return false;
 
+  // KG-2: Enforce gateway key auth
   const apiKeyHeader = (req.headers['x-api-key'] as string) || '';
-  let bodySize = 0, body = '';
+  const gatewayKey = getGatewayApiKey();
+  if (!apiKeyHeader || (apiKeyHeader !== gatewayKey && !apiKeyHeader.startsWith('sk-ant-'))) {
+    sendError(res, 401, 'authentication_error', 'Missing or invalid x-api-key header. Use the gateway key or a valid Anthropic API key.');
+    return true;
+  }
+
+  // KG-3: Body accumulation uses Buffer.concat instead of string concat
+  let bodySize = 0;
+  const chunks: Buffer[] = [];
+
   req.on('data', (chunk: Buffer) => {
     bodySize += chunk.length;
-    if (bodySize > MAX_BODY_SIZE) { sendError(res, 413, 'invalid_request_error', 'Request body too large (max 4MB)'); req.destroy(); return; }
-    body += chunk.toString();
+    if (bodySize > MAX_BODY_SIZE) {
+      sendError(res, 413, 'invalid_request_error', 'Request body too large (max 4MB)');
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
   });
   req.on('end', async () => {
     if (bodySize > MAX_BODY_SIZE) return;
     try {
+      const body = Buffer.concat(chunks).toString('utf8');
       const data = JSON.parse(body);
       await processRequest(data, apiKeyHeader, res);
     } catch (err: any) {
       if (err instanceof SyntaxError) sendError(res, 400, 'invalid_request_error', `Invalid JSON: ${err.message}`);
-      else sendError(res, 500, 'api_error', 'Internal server error');
+      else {
+        // KG-7: Debug logging for catch blocks
+        console.error('[kiro-gateway] chat-handler processRequest error:', err.message, err.stack);
+        sendError(res, 500, 'api_error', 'Internal server error');
+      }
     }
   });
   return true;
@@ -76,7 +98,8 @@ async function processRequest(data: any, apiKeyHeader: string, res: http.ServerR
       if (fresh) auth = buildKiroAuthResult(fresh);
     } catch (err: any) {
       if (err instanceof RefreshTokenExpiredError) { sendError(res, 401, 'authentication_error', err.message); return; }
-      console.error('[kiro-gateway] Token refresh failed:', err.message);
+      // KG-7: Debug logging
+      console.error('[kiro-gateway] Token refresh failed:', err.message, err.stack);
     }
   }
 

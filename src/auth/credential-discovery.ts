@@ -84,7 +84,7 @@ export function discoverKiroTokenPath(opts?: { forceRescan?: boolean }): string 
         console.error(`[kiro-gateway] Discovered Kiro credential at default path: ${defaultPath}`);
         return defaultPath;
       }
-    } catch { /* fall through */ }
+    } catch (err: any) { console.error('[kiro-gateway] Default token path parse failed:', err.message); }
   }
 
   // 3. scan candidate directories
@@ -100,9 +100,9 @@ export function discoverKiroTokenPath(opts?: { forceRescan?: boolean }): string 
           if (!looksLikeKiroToken(parsed)) continue;
           const score = tokenScore(parsed);
           if (!best || score > best.score) best = { path: full, score };
-        } catch { /* ignore */ }
+        } catch (err: any) { /* KG-7: non-critical scan error */ }
       }
-    } catch { /* ignore */ }
+    } catch (err: any) { /* KG-7: non-critical scan error */ }
   }
 
   if (best) {
@@ -138,7 +138,7 @@ function enrichWithClientCredentials(token: KiroSSOToken, tokenPath: string): vo
       if (parsed.clientId) token.clientId = parsed.clientId;
       if (parsed.clientSecret) token.clientSecret = parsed.clientSecret;
     }
-  } catch { /* best effort */ }
+  } catch (err: any) { console.error('[kiro-gateway] enrichWithClientCredentials failed:', err.message); }
 }
 
 export function writeBackToken(updated: { accessToken: string; refreshToken?: string; expiresAt: string; profileArn?: string }, tokenPath: string): void {
@@ -157,3 +157,4 @@ export function writeBackToken(updated: { accessToken: string; refreshToken?: st
     console.error('[kiro-gateway] Failed to write back refreshed token:', err.message);
   }
 }
+

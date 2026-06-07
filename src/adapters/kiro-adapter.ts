@@ -1,5 +1,7 @@
 /**
  * Kiro Adapter — SSO -> CodeWhisperer backend
+ * KG-5: Passes toolNameMap to KiroStreamConverter for name reversal
+ * KG-7: Debug logging for silent catch blocks
  */
 import * as https from 'https';
 import * as os from 'os';
@@ -72,7 +74,8 @@ export class KiroAdapter implements LLMBackendAdapter {
         const live = await fetchKiroModels(region, this.auth.bearerToken, machineId);
         if (live.length > 0) return live.map(m => ({ ...m, created_at: m.created_at ?? KIRO_MODELS_CREATED_AT }));
       } catch (err: any) {
-        console.error('[kiro-gateway] ListAvailableModels failed, falling back to static:', err.message);
+        // KG-7: Debug logging
+        console.error('[kiro-gateway] ListAvailableModels failed, falling back to static:', err.message, err.stack);
       }
     }
     return KIRO_MODELS.map(m => ({ ...m, created_at: KIRO_MODELS_CREATED_AT }));
@@ -86,7 +89,11 @@ export class KiroAdapter implements LLMBackendAdapter {
     try { conversionResult = convertRequest(requestForConversion); }
     catch (err: any) {
       if (err instanceof ConversionError) sendError(res, 400, 'invalid_request_error', err.message);
-      else sendError(res, 500, 'api_error', 'Failed to build upstream request');
+      else {
+        // KG-7: Debug logging
+        console.error('[kiro-gateway] convertRequest failed:', err.message, err.stack);
+        sendError(res, 500, 'api_error', 'Failed to build upstream request');
+      }
       return;
     }
     const bodyObj: any = { conversationState: conversionResult.conversationState };
@@ -94,13 +101,15 @@ export class KiroAdapter implements LLMBackendAdapter {
     const bodyStr = JSON.stringify(bodyObj);
     const machineId = resolveMachineId({ seed: this.auth.refreshToken || this.auth.bearerToken });
     const headers = buildKiroHeaders(host, this.auth.bearerToken, machineId);
-    this.proxyKiroStream({ targetUrl: `https://${host}/generateAssistantResponse`, headers, body: bodyStr }, res, request.model, stream);
+    // KG-5: Pass toolNameMap to proxyKiroStream for name reversal
+    this.proxyKiroStream({ targetUrl: `https://${host}/generateAssistantResponse`, headers, body: bodyStr }, res, request.model, stream, conversionResult.toolNameMap);
   }
 
-  private proxyKiroStream(options: { targetUrl: string; headers: Record<string, string>; body: string }, clientRes: http.ServerResponse, model: string, stream: boolean): void {
+  private proxyKiroStream(options: { targetUrl: string; headers: Record<string, string>; body: string }, clientRes: http.ServerResponse, model: string, stream: boolean, toolNameMap: Record<string, string>): void {
     const parsedUrl = new URL(options.targetUrl);
     const decoder = new EventStreamDecoder();
-    const converter = new KiroStreamConverter(model);
+    // KG-5: Pass toolNameMap to converter so it can reverse truncated names
+    const converter = new KiroStreamConverter(model, toolNameMap);
     const allEvents: SSEEvent[] = [];
     let started = false, streamHeadersWritten = false;
 
@@ -120,9 +129,11 @@ export class KiroAdapter implements LLMBackendAdapter {
     }, (upstreamRes) => {
       const statusCode = upstreamRes.statusCode || 500;
       if (statusCode >= 400) {
-        let errBody = '';
-        upstreamRes.on('data', (c: Buffer) => { errBody += c.toString(); });
+        // KG-3: Buffer.concat for error body
+        const errChunks: Buffer[] = [];
+        upstreamRes.on('data', (c: Buffer) => { errChunks.push(c); });
         upstreamRes.on('end', () => {
+          const errBody = Buffer.concat(errChunks).toString('utf8');
           if (!clientRes.headersSent) sendError(clientRes, statusCode, 'api_error', `Kiro API error ${statusCode}: ${errBody.substring(0, 500)}`);
           else { clientRes.write(formatSSEEvent('error', { type: 'error', error: { type: 'api_error', message: `Kiro API error ${statusCode}` } })); clientRes.end(); }
         });
@@ -133,33 +144,46 @@ export class KiroAdapter implements LLMBackendAdapter {
       upstreamRes.on('end', () => {
         for (const frame of decoder.decodeAll()) writeSse(converter.processFrame(frame));
         writeSse(converter.finish());
-        const blocks = collectBlocksFromSse(allEvents);
+        const blocks = collectBlocksFromSse(allEvents, toolNameMap);
         if (blocks.length > 0) this.options.onComplete?.(blocks);
         if (stream) clientRes.end();
-        else { clientRes.writeHead(200, { 'Content-Type': 'application/json' }); clientRes.end(JSON.stringify(buildMessageFromSse(allEvents, model))); }
+        else { clientRes.writeHead(200, { 'Content-Type': 'application/json' }); clientRes.end(JSON.stringify(buildMessageFromSse(allEvents, model, toolNameMap))); }
       });
       upstreamRes.on('error', (err: Error) => {
+        // KG-7: Debug logging
+        console.error('[kiro-gateway] Kiro upstream stream error:', err.message, err.stack);
         if (!clientRes.headersSent) sendError(clientRes, 502, 'api_error', 'Kiro stream error: ' + err.message);
         else { clientRes.write(formatSSEEvent('error', { type: 'error', error: { type: 'api_error', message: 'Kiro stream dropped' } })); clientRes.end(); }
       });
     });
 
     clientRes.on('close', () => { upstreamReq.destroy(); });
-    upstreamReq.on('error', (err: Error) => { if (!clientRes.headersSent) sendError(clientRes, 502, 'api_error', 'Failed to connect to Kiro AI service: ' + err.message); });
+    upstreamReq.on('error', (err: Error) => {
+      // KG-7: Debug logging
+      console.error('[kiro-gateway] Kiro upstream connection error:', err.message);
+      if (!clientRes.headersSent) sendError(clientRes, 502, 'api_error', 'Failed to connect to Kiro AI service: ' + err.message);
+    });
     upstreamReq.setTimeout(120000, () => { upstreamReq.destroy(); if (!clientRes.headersSent) sendError(clientRes, 504, 'api_error', 'Kiro upstream timeout'); });
     upstreamReq.write(options.body);
     upstreamReq.end();
   }
 }
 
-function collectBlocksFromSse(events: SSEEvent[]): any[] {
+function collectBlocksFromSse(events: SSEEvent[], toolNameMap: Record<string, string>): any[] {
   const blockMap = new Map<number, any>();
   const partialJson = new Map<number, string>();
   for (const ev of events) {
     const data = ev.data as any;
     if (ev.event === 'content_block_start' && data.content_block) {
       const block: any = { type: data.content_block.type };
-      if (data.content_block.type === 'tool_use') { block.id = data.content_block.id; block.name = data.content_block.name; block.input = {}; }
+      if (data.content_block.type === 'tool_use') {
+        block.id = data.content_block.id;
+        // KG-5: Name already reversed by converter, but double-check here
+        let name = data.content_block.name;
+        if (toolNameMap[name]) name = toolNameMap[name];
+        block.name = name;
+        block.input = {};
+      }
       else if (data.content_block.type === 'text') block.text = '';
       blockMap.set(data.index, block);
     } else if (ev.event === 'content_block_delta' && data.delta) {
@@ -178,8 +202,8 @@ function collectBlocksFromSse(events: SSEEvent[]): any[] {
   return blocks;
 }
 
-function buildMessageFromSse(events: SSEEvent[], model: string) {
-  const content = collectBlocksFromSse(events);
+function buildMessageFromSse(events: SSEEvent[], model: string, toolNameMap: Record<string, string>) {
+  const content = collectBlocksFromSse(events, toolNameMap);
   let stopReason = 'end_turn', outputTokens = 0;
   for (const ev of events) { if (ev.event === 'message_delta') { const d = ev.data as any; if (d.delta?.stop_reason) stopReason = d.delta.stop_reason; if (d.usage?.output_tokens) outputTokens = d.usage.output_tokens; } }
   return { id: `msg_${crypto.randomBytes(12).toString('hex')}`, type: 'message', role: 'assistant', model, content, stop_reason: stopReason, stop_sequence: null, usage: { input_tokens: 0, output_tokens: outputTokens } };

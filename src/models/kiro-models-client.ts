@@ -1,5 +1,7 @@
 /**
  * Kiro Models Client — fetches real model list from CodeWhisperer backend.
+ * KG-3: Body accumulation uses Buffer.concat
+ * KG-7: Debug logging for catch blocks
  */
 import * as https from 'https';
 import { AnthropicModel } from '../adapters/adapter';
@@ -21,16 +23,22 @@ export function fetchKiroModels(region: string, bearerToken: string, machineId: 
       hostname: host, port: 443, path: '/', method: 'POST',
       headers: { ...headers, 'Content-Length': String(Buffer.byteLength(body)) },
     }, (resp) => {
-      let raw = '';
-      resp.on('data', (c: Buffer) => { raw += c.toString(); });
+      // KG-3: Buffer.concat for response body
+      const chunks: Buffer[] = [];
+      resp.on('data', (c: Buffer) => { chunks.push(c); });
       resp.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
         if ((resp.statusCode || 500) >= 400) { reject(new Error(`ListAvailableModels HTTP ${resp.statusCode}`)); return; }
         try {
           const parsed = JSON.parse(raw);
           const models = mapKiroApiModels(parsed);
           if (models.length === 0) { reject(new Error('ListAvailableModels returned no models')); return; }
           resolve(models);
-        } catch { reject(new Error('Failed to parse ListAvailableModels response')); }
+        } catch (err: any) {
+          // KG-7: Debug logging
+          console.error('[kiro-gateway] Failed to parse ListAvailableModels response:', err.message);
+          reject(new Error('Failed to parse ListAvailableModels response'));
+        }
       });
     });
     req.on('error', reject);
