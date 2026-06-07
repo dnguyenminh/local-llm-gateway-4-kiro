@@ -62,6 +62,20 @@ jobs:
         working-directory: extension
         run: npx @vscode/vsce package --no-dependencies --allow-missing-repository
 
+      - name: Publish to VS Code Marketplace
+        working-directory: extension
+        if: env.VSCE_PAT != ''
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish -p $VSCE_PAT --no-dependencies --allow-missing-repository
+
+      - name: Publish to Open VSX (Kiro compatible)
+        working-directory: extension
+        if: env.OPENVSX_TOKEN != ''
+        env:
+          OPENVSX_TOKEN: ${{ secrets.OPENVSX_TOKEN }}
+        run: npx ovsx publish *.vsix -p $OPENVSX_TOKEN
+
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:

@@ -2,6 +2,7 @@
   "name": "local-llm-gateway-4-kiro-extension",
   "displayName": "LLM Gateway Manager for Kiro",
   "description": "Server Lifecycle Manager for Local LLM Gateway",
+  "publisher": "dnguyenminh",
   "version": "1.0.0",
   "engines": {
     "vscode": "^1.85.0"
