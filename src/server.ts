@@ -9,6 +9,7 @@ import { handleChatRoute } from './chat-handler';
 import { getGatewayApiKey } from './auth/gateway-key';
 import { resolveAuth, ensureFreshKiroToken, buildKiroAuthResult } from './auth/credential-discovery-ext';
 import { RefreshTokenExpiredError } from './auth/token-refresh';
+import { renderGatewayInfoPage } from './ui/gateway-info-page';
 
 export function createServer(config: GatewayConfig): http.Server {
   const server = http.createServer((req, res) => {
@@ -50,6 +51,20 @@ export function createServer(config: GatewayConfig): http.Server {
       const key = getGatewayApiKey();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ gateway_key: key }));
+      return;
+    }
+
+    // Gateway Info UI page (localhost only — injects the gateway key)
+    if (req.method === 'GET' && (pathOnly === '/' || pathOnly === '/ui')) {
+      const remoteAddr = req.socket.remoteAddress || '';
+      if (remoteAddr !== '127.0.0.1' && remoteAddr !== '::1' && remoteAddr !== '::ffff:127.0.0.1') {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ type: 'error', error: { type: 'forbidden', message: 'UI is only accessible from localhost' } }));
+        return;
+      }
+      const html = renderGatewayInfoPage(config.port, getGatewayApiKey());
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
       return;
     }
 

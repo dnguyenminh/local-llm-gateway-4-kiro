@@ -129,6 +129,24 @@ All lifecycle events are logged to the "LLM Gateway" output channel (`View → O
 - Node.js >= 18 (for the gateway server)
 - llm-gateway built (`npm run build` in root)
 
+## Changelog
+
+### v1.1.0
+
+- **[KG-8] Full lifecycle management implementation**
+  - Auto-start server on editor launch
+  - Singleton model — multiple windows share one server process
+  - Health monitoring with configurable interval
+  - Auto-restart with exponential backoff (2s → 4s → 8s, max 3 attempts)
+  - Status bar with live state indicator
+  - Commands: Start, Stop, Restart, Show Status, Copy API Key
+  - Cross-platform process management (Windows, macOS, Linux)
+  - Graceful shutdown and ownership transfer
+
+### v1.0.0
+
+- Initial extension scaffold
+
 ## License
 
 MIT

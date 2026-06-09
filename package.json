@@ -1,6 +1,6 @@
 {
   "name": "local-llm-gateway-4-kiro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Anthropic-compatible local API gateway for Kiro IDE — powered by SSO credentials",
   "bin": {
     "llm-gateway": "dist/index.js"

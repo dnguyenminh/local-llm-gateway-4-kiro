@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * kiro-gateway — CLI Entry Point
  * Anthropic-compatible API gateway powered by Kiro/AWS SSO credentials.

@@ -133,6 +133,23 @@ npm start          # Run compiled output
 
 This project was inspired by [kiro.rs](https://github.com/hank9999/kiro.rs) — a Rust-based Kiro API proxy. While kiro.rs focuses on multi-user server deployment, this project takes a different approach as a lightweight, developer-local CLI tool with automatic lifecycle management via an IDE extension.
 
+## Changelog
+
+### v1.1.0
+
+- **[KG-8] Extension Lifecycle Manager** — VS Code / Kiro extension that auto-starts, health-monitors, and gracefully manages the gateway server process
+  - Auto-start on editor launch (configurable)
+  - Singleton guarantee across multiple editor windows
+  - Health monitoring with exponential backoff restart (max 3 attempts)
+  - Status bar indicator with live server state
+  - Commands: Start, Stop, Restart, Show Status, Copy API Key
+  - Cross-platform support (Windows, macOS, Linux)
+  - Graceful shutdown on last editor window close
+
+### v1.0.0
+
+- Initial release — Local LLM Gateway server with dual-mode routing (Kiro SSO + Anthropic passthrough)
+
 ## License
 
 MIT
