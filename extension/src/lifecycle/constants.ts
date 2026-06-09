@@ -5,7 +5,7 @@
 export const DEFAULTS = {
   PORT: 8990,
   AUTO_START: true,
-  SERVER_PATH: './dist/index.js',
+  SERVER_PATH: '', // Resolved at runtime from extension directory
   HEALTH_CHECK_INTERVAL: 30,
 } as const;
 

@@ -3,7 +3,7 @@
   "displayName": "LLM Gateway Manager for Kiro",
   "description": "Server Lifecycle Manager for Local LLM Gateway",
   "publisher": "dnguyenminh",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -54,8 +54,8 @@
         },
         "kiroGateway.serverPath": {
           "type": "string",
-          "default": "./dist/index.js",
-          "description": "Path to the Kiro Gateway server script"
+          "default": "",
+          "description": "Path to the gateway server script. Leave empty to use the bundled server."
         },
         "kiroGateway.healthCheckInterval": {
           "type": "number",
@@ -70,7 +70,9 @@
   "scripts": {
     "compile": "esbuild src/extension.ts --bundle --platform=node --target=node18 --outfile=out/extension.js --format=cjs --external:vscode",
     "compile:tsc": "tsc -p ./",
-    "watch": "esbuild src/extension.ts --bundle --platform=node --target=node18 --outfile=out/extension.js --format=cjs --external:vscode --watch"
+    "watch": "esbuild src/extension.ts --bundle --platform=node --target=node18 --outfile=out/extension.js --format=cjs --external:vscode --watch",
+    "bundle-server": "node -e \"const fs=require('fs'),p=require('path');fs.mkdirSync('server',{recursive:true});fs.copyFileSync(p.join('..','dist','index.js'),'server/index.js');console.log('Server bundled to extension/server/index.js')\"",
+    "package": "npm run compile && npm run bundle-server && npx @vscode/vsce package --no-dependencies --allow-missing-repository"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

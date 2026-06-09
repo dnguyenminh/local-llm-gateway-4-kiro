@@ -7,6 +7,7 @@ dist/
 # Extension build output
 extension/out/
 extension/node_modules/
+extension/server/
 extension/*.vsix
 
 # IDE & tool configs

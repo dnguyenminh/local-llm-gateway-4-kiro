@@ -103,14 +103,18 @@ export async function deactivate(): Promise<void> {
 }
 
 function readConfig(): LifecycleConfig {
+  const path = require('path');
   const cfg = vscode.workspace.getConfiguration('kiroGateway');
-  let serverPath = cfg.get<string>('serverPath', DEFAULTS.SERVER_PATH);
+  let serverPath = cfg.get<string>('serverPath', '');
 
-  // Resolve relative serverPath from workspace folder
-  if (serverPath && !require('path').isAbsolute(serverPath)) {
+  if (!serverPath) {
+    // Default: bundled server inside extension directory
+    serverPath = path.join(__dirname, '..', 'server', 'index.js');
+  } else if (!path.isAbsolute(serverPath)) {
+    // User-configured relative path: resolve from workspace folder
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspaceFolder) {
-      serverPath = require('path').resolve(workspaceFolder, serverPath);
+      serverPath = path.resolve(workspaceFolder, serverPath);
     }
   }
 
